@@ -85,14 +85,17 @@ class LK_Wxpay_Helper_Api extends LK_Wxpay_Helper_Data
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
         }
-        //var_dump($postData);die;
+        
         $data = curl_exec($ch);
+        curl_close($ch);
+        /*  调试用
         $errorno = curl_errno($ch);
         $info = curl_getinfo($ch);
         $info['errorno'] = $errorno;
         curl_close($ch);
         $ret = json_encode($info);
         echo $ret;die;
+        */
         return $data;
     }
     /*
@@ -118,13 +121,25 @@ class LK_Wxpay_Helper_Api extends LK_Wxpay_Helper_Data
             'total_fee' => intval($totalFee * 100),       //单位 转为分
             'trade_type' => 'NATIVE'
         );
-        var_dump($wxpayApi);die;
+        //var_dump($wxpayApi);die;
         $unified['sign'] = $this->getSign($unified, $wxpayApi['api_key']);
         //echo $this->arrayToXml($unified);die;
-        var_dump($unified);die;
+        //var_dump($unified);die;
+        // 获取沙箱秘钥 sandbox_signkey
         $responseXMLofsignkey = self::curlPost('https://api.mch.weixin.qq.com/sandboxnew/pay/getsignkey',$this->arrayToXml_getsignkey($unified));
-        //$responseXml = self::curlPost('https://api.mch.weixin.qq.com/sandboxnew/pay/unifiedorder', $this->arrayToXml($unified));
-        var_dump($responseXML);die;
+        $tmpResult = simplexml_load_string($responseXMLofsignkey, 'SimpleXMLElement', LIBXML_NOCDATA);
+        $sandbox_signkey = $tmpResult->sandbox_signkey;
+        // 用获取到的sandbox_signkey替换原来的key
+        $wxpayApi['api_key'] = $sandbox_signkey;
+        //重新发起sign签名
+        $unified['sign'] = $this->getSign($unified, $wxpayApi['api_key']);
+        //调起支付交易
+        $responseXml = self::curlPost('https://api.mch.weixin.qq.com/sandboxnew/pay/unifiedorder', $this->arrayToXml($unified));
+        /*
+        正常商户号信息调用地址
+        $responseXml = self::curlPost('https://api.mch.weixin.qq.com/pay/unifiedorder', $this->arrayToXml($unified));*/
+        
+        //var_dump($responseXMLofsignkey);die;
         $unifiedOrder = simplexml_load_string($responseXml, 'SimpleXMLElement', LIBXML_NOCDATA);
         $message = '';
         if ($unifiedOrder === false) {
